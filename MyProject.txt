@@ -1,0 +1,54 @@
+--In my shell implementation, it is valgrind clean and able to deal with some corner cases that I come up with. It can also print out error message in parti
+cular circumstances.
+For example, when the usr do not type in any command but just press "return" button, my shell would keeps printing out the myShell prompt and wait for the u
+sr to type in command.
+One problem about execve in myShell: when the user input invalid input program, like"/home/what". execve will fail in this circumstance, I print out "Error" in
+this condition, and throw an exception. But this will result in "one block possibly leak" in valgrind. The problem is the same if i use exit(EXIT_FAILURE).
+When I do not throw exception and use return(EXIT_FAILURE), it do not have possibly leak but the child process can not be exited normally, which means that i
+need to type exit more than once to exit myShell. Currently, i still throw an exception in this condition.
+
+--Overall description about myShell implementation and test cases I used in each step.
+I divide the whole program into four parts, three headfiles and one myShell.cpp file. Three headfiles are parse.h, builtin.h and redirect.h. These three hea
+d files include some functions I created during the design of the program.
+
+1. parse.h includes two functions, parseenv(char* PATH, int* size) and parseline(string line). Parseenv is used in step 2 when I want to search the environment
+ varibale, I need to parse the environment variable first based on the ":" mark. After char* path = getenv("PATH"), we go into parseenv function and parse a
+ll the environment variable so that we can search each of them respectively. Parseline function is the key function in myShell, it deals with parse the comm
+and that user typed in based on the requirment of step 2. After myShell read a stdin from user, I will call parseline function to parse the command into diff
+erent strings and store them into vector<string>args. This vector is the key for all the following functions since vector<string>args stores all the informa
+tion myShell get from the user.
+
+2. builtin.h includes all the builtin functions required in step 3. pushdfunc is the function to implement "pushd" command, popdfunc deals with "popd" command,
+ dirstackfunc deals with "dirstack" command and cdfunc for "cd" command. In the end, I write the function called "exitfunc", which exit myShell program when
+ user type in "exit" and clean all the memory allocated in myShell program. In the pushd, popd, dirstacked, cd functions, I write some error handling statme
+nts. In pushd, I limit the size of args to be 2 since pushd should push one directory to the stack, pushd dir1 dir2 dir3 is not valid and myShell would prin
+t out "input one directory for push!"and wait for the user to type command. Also, if the args[1] is not valid, it will print out "directory not exist!". In
+myShell, I create the stack to have maximum size of 1024. So if the stack is full, pushdfunc function would print out "stack is full!" message. For cdfunc,
+popdfunc and dirstackfunc, they all have error handling statements like pushdfunc.
+
+3. redirect.h includes three functions, SearchPath function is used in step2 when the command does not have a "/" in it. This function would search all the pat
+h environment variables parsed in parseenv function to find which PATH has the command that user type in. redirect(string file, int flag) function deals wit
+h I/O redirection in step4. The caller would give a flag to the parameter of redirect function to indicate it is input redirection, output redirection or st
+derr redirection. In this function, I use open() and dup2() to reconnect the input and output. After this function, input and output have been redirected an
+d I can execute the command in myShell.cpp as usual. Pipeline function deals with pipe in step4. When I find "|" in args I will call this function, this fun
+ction builds up pipe between two programs.After I find one "|" mark and call pipeline function, "|" mark and the command before it will be erased in args(ca
+n be seen in pipeline funcion) so that I can continue search the
+args and find other "|" mark.
+
+4. myShell.cpp is the main function for myShell program, in the main function I
+just call loop() function which is the "infinite loop" for myShell. The whole process for myShell is first I getline(cin,cmd) to read stdin from user and t
+hen I call parseline function(in parse.h) to parse the command user typed in and store in vector<string>args,
+then I call execute function(which in charge of other functions) to execute args, the return value of execute is 0 or 1, if it is 0, loop will terminate and my\
+Shell
+will exit.
+In execute function, it checks the vector<string>args. If args[0] maps any one of"cd", "exit", "pushd", "dirstack", execute function would call their correspon\
+ding
+function in builtin.h.
+After this, it will search "/" in args[0], if not found, execute function would call SearchPath function(in redirect.h) to search for environment varibale.
+After this, execute would call launch(vector<string>&args) function. launch function is the real function to fork() child process and execve it.
+In the child process, I add the check for ">" "<" "2>" and "|" and some other statments for step4, so the child process seems long. The function of launch func\
+tion
+is to execute the command (including i/o redirection and pipes). I also wrote a exception class, when the comand usr input is not executable, it will throw an \
+exce
+ption.
+
